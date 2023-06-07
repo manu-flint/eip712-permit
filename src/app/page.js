@@ -3,6 +3,9 @@
 import { ethers } from "ethers";
 import { useState, useEffect } from "react";
 import { abi } from "./usdcAbi";
+
+import Web3Modal from "web3modal";
+
 export default function Home() {
   const [signer, setSigner] = useState(null);
   const [nonce, setNonce] = useState(null);
@@ -38,14 +41,15 @@ export default function Home() {
     const amount = 1000;
     const deadline = +new Date() + 60 * 60;
     console.log("deadline: " + deadline);
+    localStorage.setItem("deadline", JSON.stringify(deadline));
+
     console.log("chain Id:", 5);
     console.log("nonce", nonce);
 
     console.log("myAccount", myAccount);
     const spenderAccount = "0x59b96884db1acf2b6881ab8153C363c38DD11B2D";
     console.log("spender account", spenderAccount);
-    const ammount = 1000;
-    console.log("amount to approve", ammount);
+    console.log("amount to approve", amount);
 
     const typedData = {
       types: {
@@ -66,7 +70,7 @@ export default function Home() {
       primaryType: "Permit",
       domain: {
         name: "Goerli USD Coin",
-        version: "1",
+        version: "2",
         chainId: 5,
         verifyingContract: "0x2f3a40a3db8a7e3d09b0adfefbce4f6f81927557", // goerli usdc contratc address
       },
@@ -74,7 +78,7 @@ export default function Home() {
         owner: myAccount, // account 1
         spender: spenderAccount, // account 2
         value: amount,
-        nonce: nonce,
+        nonce: nonce, // if failing second time because of nonce then try incrementing it manually like nonce + 1
         deadline: deadline,
       },
     };
@@ -83,21 +87,23 @@ export default function Home() {
       myAccount,
       JSON.stringify(typedData),
     ]);
-    console.log("signature", signature);
+    console.log("signature for ", myAccount, signature);
+    localStorage.setItem("signature", JSON.stringify(signature));
 
     const splitSignature = ethers.utils.splitSignature(signature);
 
     console.log("r: ", splitSignature.r);
     console.log("s: ", splitSignature.s);
     console.log("v: ", splitSignature.v);
+  }
 
-    // goerli usdc info
-    const provider = new ethers.providers.JsonRpcProvider(
-      "https://goerli.infura.io/v3/a14041d30b9a4bcc9104dc73c3908672"
-    );
+  async function handlePermit() {
+    const web3Modal = new Web3Modal();
+    const connection = await web3Modal.connect();
+    const provider = new ethers.providers.Web3Provider(connection);
+    const signer2 = provider.getSigner();
 
-    const signer2 = await provider.getSigner(spenderAccount);
-    console.log("2nd signer", signer2.getAddress());
+    console.log("2nd signer", signer2);
     const usdcContractAddress = "0x2f3a40a3db8a7e3d09b0adfefbce4f6f81927557";
     const usdcContractABI = abi;
 
@@ -106,10 +112,24 @@ export default function Home() {
       usdcContractABI,
       signer2
     );
-    // console.log("contract", usdcContract);
+    console.log("contract", usdcContract);
+    let account1 = "0xB3B4F48c36674A17e6C288B6Ad78266ed5a1bc3F";
+    let account2 = "0x59b96884db1acf2b6881ab8153C363c38DD11B2D";
+    console.log(account1, account2);
+    const amount = 1000;
+    const deadline = JSON.parse(localStorage.getItem("deadline"));
+    console.log("deadline permit", deadline);
+
+    const signature = JSON.parse(localStorage.getItem("signature"));
+    console.log("signature permit", signature);
+    const splitSignature = ethers.utils.splitSignature(signature);
+    console.log("r: ", splitSignature.r);
+    console.log("s: ", splitSignature.s);
+    console.log("v: ", splitSignature.v);
+
     const tx = await usdcContract.permit(
-      myAccount,
-      spenderAccount,
+      account1,
+      account2,
       amount,
       deadline,
       splitSignature.v,
@@ -122,6 +142,7 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-24">
       <button onClick={handleSign}>Sign with account 1</button>
+      <button onClick={handlePermit}>call permit with account 2</button>
     </main>
   );
 }
